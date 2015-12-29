@@ -226,7 +226,7 @@ int sdl_thread_proc(void* data)
 	// fix broken pthreads implementations, where this proc's frame
 	// is not 16 byte aligned...
 	//
-#if defined __GNUC__ && !defined __x86_64__
+#if defined __GNUC__ && !defined __x86_64__ && !_WIN32
 	__asm __volatile("andl	$-16,	%%esp" ::: "%esp");
 #endif
 	//
@@ -238,7 +238,7 @@ void new_thread(SDL_Thread **handle, ThreadInfoStruct *info)
 {
 	*handle = SDL_CreateThread(sdl_thread_proc, info);
 }
- 
+
 void ThreadPool::one_more_thread(void)
 {
 	ThreadInfoStruct& ti = info[active_count];
@@ -249,7 +249,7 @@ void ThreadPool::one_more_thread(void)
 	ti.execute_class = NULL;
 	ti.waiting = &waiting;
 	new_thread(&ti.thread, &ti);
-	
+
 	++active_count;
 	for (int i = active_count-1; i >= 0; i--)
 		info[i].thread_count = active_count;
@@ -284,11 +284,11 @@ void ThreadPool::run(Parallel *para, int threads_count)
 		para->entry(0, 1);
 		return;
 	}
-	while (active_count < threads_count) 
+	while (active_count < threads_count)
 		one_more_thread();
 	int n = threads_count;
 	m_n = -1;
-	
+
 	waiting = true;
 	counter = n;
 	for (int i = 0; i < n; i++) {
@@ -303,7 +303,7 @@ void ThreadPool::run(Parallel *para, int threads_count)
 	}
 	thread_pool_event.wait();
 	waiting = false;
-	
+
 	// round robin all threads until they come to rest
 	while (1) {
 		bool good = true;
@@ -315,11 +315,11 @@ void ThreadPool::run(Parallel *para, int threads_count)
 
 void ThreadPool::run_async(Parallel *para, int threads_count)
 {
-	while (active_count < threads_count) 
+	while (active_count < threads_count)
 		one_more_thread();
 	int n = threads_count;
 	m_n = n;
-	
+
 	waiting = true;
 	counter = n;
 	for (int i = 0; i < n; i++) {
@@ -349,7 +349,7 @@ void ThreadPool::wait(void)
 	}
 	thread_pool_event.wait();
 	waiting = false;
-	
+
 	// round robin all threads until they come to rest
 	while (1) {
 		bool good = true;
