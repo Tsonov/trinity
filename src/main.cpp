@@ -21,6 +21,7 @@
 #include <SDL/SDL.h>
 #include <vector>
 #include <iostream>
+#include <string>
 #include "sdl.h"
 #include "matrix.h"
 #include "camera.h"
@@ -360,6 +361,49 @@ public:
 	}
 };
 
+void consoleMode(void)
+{
+    string line;
+    int frameWidth;
+    int frameHeight;
+    int startX, startY;
+    Color pixel(0, 0, 0);
+
+    while(true)
+    {
+        std::cin>>line;
+        if (line.find("begin") != string::npos) {
+            cout<<"Rendering will start. Enter width, height, dx and dy in this order"<<endl;
+            cin>>frameWidth;
+            cin>>frameHeight;
+            cin>>startX;
+            cin>>startY;
+            cout<<"Starting"<<endl;
+            scene.beginFrame();
+            for(int y = startY; y < startY + frameHeight; y++) {
+                for(int x = startX; x < startX + frameWidth; x++) {
+//                    if (scene.settings.wantAA) {
+//                        Color sum(0, 0, 0);
+//                        for (int i = 0; i < COUNT_OF(kernel); i++)
+//                            sum += raytrace(scene.camera->getScreenRay(x + kernel[i][0], y + kernel[i][1]));
+//                        pixel = sum / double(COUNT_OF(kernel));
+//                    } else {
+//                        Ray ray = scene.camera->getScreenRay(x, y);
+//                        pixel = raytrace(ray);
+//                    }
+                    pixel.components[0] = (y % 255) / 255.0;
+                    pixel.components[2] = (x % 255) / 255.0;
+                    cout<<pixel.toR8G8B8()<<" ";
+                }
+                cout<<"\n";
+            }
+            cout<<"Finished"<<std::endl;
+        }
+        if(line.find("close") != string::npos) {
+            return;
+        }
+    }
+}
 
 void renderScene(void)
 {
@@ -463,13 +507,27 @@ void handleMouse(SDL_MouseButtonEvent *mev)
 }
 
 const char* defaultScene = "data/boxed.trinity";
+bool inConsoleMode = false;
 
 static bool parseCmdLine(int argc, char** argv)
 {
 	if (argc < 2) return true;
 	if (!strcmp(argv[1], "-h") || !strcmp(argv[1], "--help")) {
-		printf("Usage: retrace [scenefile]\n");
+		cout<<"Usage: trinity [scenefile] -or- trinity [-con|--console] for console mode"<<endl;
 		return false;
+	}
+	if (!strcmp(argv[1], "-con") || !strcmp(argv[1], "--console")) {
+        // Console mode requested, need a scene file
+        if (argc < 3) {
+            cout<<"Must provide a scene file for console mode"<<endl;
+            return false;
+        }
+        else {
+            inConsoleMode = true;
+            defaultScene = argv[2];
+            cout<<"Console mode enabled"<<endl;
+            return true;
+        }
 	}
 	defaultScene = argv[1];
 	return true;
@@ -577,21 +635,31 @@ int main(int argc, char** argv)
 		scene.settings.numThreads = get_processor_count();
 	if (scene.settings.interactive)
 		scene.settings.wantAA = scene.settings.wantPrepass = false;
-	bool fullscreen = scene.settings.interactive && scene.settings.fullscreen;
 
-	if (!initGraphics(scene.settings.frameWidth, scene.settings.frameHeight, fullscreen)) return -1;
-	scene.beginRender();
-	if (scene.settings.interactive) {
-		mainloop();
-	} else {
-		Uint32 startTicks = SDL_GetTicks();
-		renderScene_Threaded();
-		float renderTime = (SDL_GetTicks() - startTicks) / 1000.0f;
-		printf("Render time: %.2f seconds.\n", renderTime);
-		setWindowCaption("trinity: rendertime: %.2fs", renderTime);
-		displayVFB(vfb);
-		waitForUserExit();
-	}
-	closeGraphics();
+    scene.beginRender();
+
+    if (inConsoleMode) {
+        if (scene.settings.interactive || scene.settings.fullscreen) {
+            printf("Warning: Some settings like interactive and fullscreen are ignored in console mode\n");
+        }
+        consoleMode();
+    } else {
+        bool fullscreen = scene.settings.interactive && scene.settings.fullscreen;
+
+        if (!initGraphics(scene.settings.frameWidth, scene.settings.frameHeight, fullscreen)) return -1;
+        if (scene.settings.interactive) {
+            mainloop();
+        } else {
+            Uint32 startTicks = SDL_GetTicks();
+            renderScene_Threaded();
+            float renderTime = (SDL_GetTicks() - startTicks) / 1000.0f;
+            printf("Render time: %.2f seconds.\n", renderTime);
+            setWindowCaption("trinity: rendertime: %.2fs", renderTime);
+            displayVFB(vfb);
+            waitForUserExit();
+        }
+        closeGraphics();
+    }
+
 	return 0;
 }

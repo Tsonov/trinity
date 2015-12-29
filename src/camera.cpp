@@ -21,30 +21,29 @@
 #include "camera.h"
 #include "matrix.h"
 #include "util.h"
-#include "sdl.h"
 #include "random_generator.h"
 
 void Camera::beginFrame(void)
 {
 	double x = -aspect;
 	double y = +1;
-	
+
 	Vector corner = Vector(x, y, 1);
 	Vector center = Vector(0, 0, 1);
-	
+
 	double lenXY = (corner - center).length();
 	double wantedLength = tan(toRadians(fov / 2));
-	
+
 	double scaling = wantedLength / lenXY;
-	
+
 	x *= scaling;
 	y *= scaling;
-	
-	
+
+
 	this->upLeft = Vector(x, y, 1);
 	this->upRight = Vector(-x, y, 1);
 	this->downLeft = Vector(x, -y, 1);
-	
+
 	Matrix rotation = rotationAroundZ(toRadians(roll))
 	                * rotationAroundX(toRadians(pitch))
 	                * rotationAroundY(toRadians(yaw));
@@ -54,7 +53,7 @@ void Camera::beginFrame(void)
 	rightDir = Vector(1, 0, 0) * rotation;
 	upDir    = Vector(0, 1, 0) * rotation;
 	frontDir = Vector(0, 0, 1) * rotation;
-	
+
 	upLeft += pos;
 	upRight += pos;
 	downLeft += pos;
@@ -64,34 +63,34 @@ Ray Camera::getScreenRay(double x, double y, int camera)
 {
 	Ray result; // A, B -     C = A + (B - A) * x
 	result.start = this->pos;
-	Vector target = upLeft + 
-		(upRight - upLeft) * (x / (double) frameWidth()) +
-		(downLeft - upLeft) * (y / (double) frameHeight());
-	
+	Vector target = upLeft +
+		(upRight - upLeft) * (x / (double) scene.settings.frameWidth) +
+		(downLeft - upLeft) * (y / (double) scene.settings.frameHeight);
+
 	// A - camera; B = target
 	result.dir = target - this->pos;
-	
+
 	result.dir.normalize();
-	
+
 	if (camera != CAMERA_CENTER) {
 		// offset left/right for stereoscopic rendering
 		result.start += rightDir * (camera == CAMERA_RIGHT ? +stereoSeparation : -stereoSeparation);
 	}
-	
+
 	if (!dof) return result;
-	
+
 	double cosTheta = dot(result.dir, frontDir);
 	double M = focalPlaneDist / cosTheta;
-	
+
 	Vector T = result.start + result.dir * M;
-	
+
 	Random& R = getRandomGen();
 	double dx, dy;
 	R.unitDiscSample(dx, dy);
-	
+
 	dx *= discMultiplier;
 	dy *= discMultiplier;
-	
+
 	result.start = this->pos + dx * rightDir + dy * upDir;
 	if (camera != CAMERA_CENTER) {
 		result.start += rightDir * (camera == CAMERA_RIGHT ? +stereoSeparation : -stereoSeparation);
@@ -112,6 +111,6 @@ void Camera::rotate(double dx, double dz)
 	pitch += dz;
 	if (pitch >  90) pitch = 90;
 	if (pitch < -90) pitch = -90;
-	
+
 	yaw += dx;
 }

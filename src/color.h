@@ -74,6 +74,14 @@ struct Color {
 		unsigned ib = convertTo8bit_sRGB_cached(b);
 		return (ib << blueShift) | (ig << greenShift) | (ir << redShift);
 	}
+    /// convert to R8G8B8 like "0xffcc33"
+    unsigned toR8G8B8()
+    {
+		unsigned ir = convertTo8bit(r);
+		unsigned ig = convertTo8bit(g);
+		unsigned ib = convertTo8bit(b);
+		return (ib << 0) | (ig << 8) | (ir << 16);
+    }
 	/// make black
 	void makeZero(void)
 	{
@@ -118,7 +126,7 @@ struct Color {
 		g *= rdivider;
 		b *= rdivider;
 	}
-	
+
 	void adjustSaturation(float amount) // 0 = desaturate; 1 = don't change
 	{
 		float mid = intensity();
@@ -126,12 +134,12 @@ struct Color {
 		g = g * amount + mid * (1 - amount);
 		b = b * amount + mid * (1 - amount);
 	}
-	
+
 	inline const float& operator[] (int index) const
 	{
 		return components[index];
 	}
-	
+
 	inline float& operator[] (int index)
 	{
 		return components[index];
