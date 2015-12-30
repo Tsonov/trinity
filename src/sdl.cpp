@@ -133,13 +133,13 @@ static void findUnusedFN(char fn[], const char* suffix)
 		fclose(f);
 		idx++;
 	}
-	sprintf(fn, "trinity_%04d.%s", idx, suffix); 
+	sprintf(fn, "trinity_%04d.%s", idx, suffix);
 }
 
 bool takeScreenshot(const char* filename)
 {
 	extern Color vfb[VFB_MAX_SIZE][VFB_MAX_SIZE]; // from main.cpp
-	
+
 	Bitmap bmp;
 	bmp.generateEmptyImage(frameWidth(), frameHeight());
 	for (int y = 0; y < frameHeight(); y++)
@@ -207,22 +207,26 @@ void waitForUserExit(void)
 
 std::vector<Rect> getBucketsList(void)
 {
-	std::vector<Rect> res;
 	const int BUCKET_SIZE = 48;
-	int W = frameWidth();
-	int H = frameHeight();
-	int BW = (W - 1) / BUCKET_SIZE + 1;
-	int BH = (H - 1) / BUCKET_SIZE + 1;
+	return getBucketsList(BUCKET_SIZE, frameWidth(), frameHeight(), 0, 0);
+}
+
+std::vector<Rect> getBucketsList(int bucketSize, int frameWidth, int frameHeight, int dx, int dy)
+{
+	std::vector<Rect> res;
+	int BW = (frameWidth - 1) / bucketSize + 1;
+	int BH = (frameHeight - 1) / bucketSize + 1;
 	for (int y = 0; y < BH; y++) {
 		if (y % 2 == 0)
 			for (int x = 0; x < BW; x++)
-				res.push_back(Rect(x * BUCKET_SIZE, y * BUCKET_SIZE, (x + 1) * BUCKET_SIZE, (y + 1) * BUCKET_SIZE));
+				res.push_back(Rect(dx + x * bucketSize, dy + y * bucketSize, dx + (x + 1) * bucketSize, dy + (y + 1) * bucketSize));
 		else
 			for (int x = BW - 1; x >= 0; x--)
-				res.push_back(Rect(x * BUCKET_SIZE, y * BUCKET_SIZE, (x + 1) * BUCKET_SIZE, (y + 1) * BUCKET_SIZE));
+				res.push_back(Rect(dx + x * bucketSize, dy + y * bucketSize, dx + (x + 1) * bucketSize, dy + (y + 1) * bucketSize));
 	}
 	for (int i = 0; i < (int) res.size(); i++)
-		res[i].clip(W, H);
+        // Expects width coordinates, not the width itself
+		res[i].clip(dx + frameWidth, dy + frameHeight);
 	return res;
 }
 
@@ -243,15 +247,15 @@ public:
 bool drawRect(Rect r, const Color& c)
 {
 	MutexRAII raii(render_lock);
-	
+
 	if (render_async && !rendering) return false;
-	
+
 	r.clip(frameWidth(), frameHeight());
-	
+
 	int rs = screen->format->Rshift;
 	int gs = screen->format->Gshift;
 	int bs = screen->format->Bshift;
-	
+
 	Uint32 clr = c.toRGB32(rs, gs, bs);
 	for (int y = r.y0; y < r.y1; y++) {
 		Uint32 *row = (Uint32*) ((Uint8*) screen->pixels + y * screen->pitch);
@@ -259,7 +263,7 @@ bool drawRect(Rect r, const Color& c)
 			row[x] = clr;
 	}
 	SDL_UpdateRect(screen, r.x0, r.y0, r.w, r.h);
-	
+
 	return true;
 }
 
@@ -268,7 +272,7 @@ bool displayVFBRect(Rect r, Color vfb[VFB_MAX_SIZE][VFB_MAX_SIZE])
 	MutexRAII raii(render_lock);
 
 	if (render_async && !rendering) return false;
-	
+
 	r.clip(frameWidth(), frameHeight());
 	int rs = screen->format->Rshift;
 	int gs = screen->format->Gshift;
@@ -279,7 +283,7 @@ bool displayVFBRect(Rect r, Color vfb[VFB_MAX_SIZE][VFB_MAX_SIZE])
 			row[x] = vfb[y][x].toRGB32(rs, gs, bs);
 	}
 	SDL_UpdateRect(screen, r.x0, r.y0, r.w, r.h);
-	
+
 	return true;
 }
 
@@ -288,7 +292,7 @@ bool markRegion(Rect r, const Color& bracketColor)
 	MutexRAII raii(render_lock);
 
 	if (render_async && !rendering) return false;
-	
+
 	r.clip(frameWidth(), frameHeight());
 	const int L = 8;
 	if (r.w < L+3 || r.h < L+3) return true; // region is too small to be marked
@@ -305,7 +309,7 @@ bool markRegion(Rect r, const Color& bracketColor)
 		DRAW_ONE(y, r.h - 1 - (x), color); \
 		DRAW_ONE(r.w - 1 - (x), r.h - 1 - (y), color); \
 		DRAW_ONE(r.w - 1 - (y), r.h - 1 - (x), color)
-	
+
 	for (int i = 1; i <= L; i++) {
 		DRAW(i, 0, OUTLINE_COLOR);
 	}
@@ -317,9 +321,9 @@ bool markRegion(Rect r, const Color& bracketColor)
 	for  (int i = 2; i <= L; i++) {
 		DRAW(i, 1, BRACKET_COLOR);
 	}
-	
+
 	SDL_UpdateRect(screen, r.x0, r.y0, r.w, r.h);
-	
+
 	return true;
 }
 
@@ -331,12 +335,12 @@ bool renderScene_Threaded(void)
 	rendering = true;
 	extern int renderSceneThread(void*);
 	render_thread = SDL_CreateThread(renderSceneThread, NULL);
-	
+
 	if(render_thread == NULL) { //Failed to start for some bloody reason
 		rendering = render_async = false;
 		return false;
 	}
-	
+
 	while (!wantToQuit) {
 		{
 			MutexRAII raii(render_lock);
@@ -352,7 +356,7 @@ bool renderScene_Threaded(void)
 	rendering = false;
 	SDL_WaitThread(render_thread, NULL);
 	render_thread = NULL;
-	
+
 	render_async = false;
 	return true;
 }

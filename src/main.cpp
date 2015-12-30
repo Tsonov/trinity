@@ -315,9 +315,10 @@ Color renderPixelAA(int x, int y)
 class TaskNoAA: public Parallel
 {
 	const vector<Rect>& buckets;
+	const bool shouldDisplay;
 	InterlockedInt counter;
 public:
-	TaskNoAA(const vector<Rect>& buckets): buckets(buckets), counter(0)
+	TaskNoAA(const vector<Rect>& buckets, const bool shouldDisplay = true): buckets(buckets), shouldDisplay(shouldDisplay), counter(0)
 	{
 	}
 
@@ -330,19 +331,19 @@ public:
 			for (int y = r.y0; y < r.y1; y++)
 				for (int x = r.x0; x < r.x1; x++)
 					renderPixelNoAA(x, y);
-			if (!scene.settings.interactive)
+			if (shouldDisplay && !scene.settings.interactive)
 				if (!displayVFBRect(r, vfb))
 					return;
 		}
-
 	}
 };
 
 class TaskAA: public Parallel {
 	const vector<Rect>& buckets;
+    const bool shouldDisplay;
 	InterlockedInt counter;
 public:
-	TaskAA(const vector<Rect>& buckets): buckets(buckets), counter(0)
+	TaskAA(const vector<Rect>& buckets, const bool shouldDisplay = true): buckets(buckets), shouldDisplay(shouldDisplay), counter(0)
 	{
 	}
 
@@ -350,60 +351,16 @@ public:
 		int i;
 		while ((i = counter++) < (int) buckets.size()) {
 			const Rect& r = buckets[i];
-			if (!markRegion(r))
+			if (shouldDisplay && !markRegion(r))
 				return;
 			for (int y = r.y0; y < r.y1; y++)
 				for (int x = r.x0; x < r.x1; x++)
 					if (needsAA[y][x]) renderPixelAA(x, y);
-			if (!displayVFBRect(r, vfb))
+			if (shouldDisplay && !displayVFBRect(r, vfb))
 				return;
 		}
 	}
 };
-
-void consoleMode(void)
-{
-    string line;
-    int frameWidth;
-    int frameHeight;
-    int startX, startY;
-    Color pixel(0, 0, 0);
-
-    while(true)
-    {
-        std::cin>>line;
-        if (line.find("begin") != string::npos) {
-            cout<<"Rendering will start. Enter width, height, dx and dy in this order"<<endl;
-            cin>>frameWidth;
-            cin>>frameHeight;
-            cin>>startX;
-            cin>>startY;
-            cout<<"Starting"<<endl;
-            scene.beginFrame();
-            for(int y = startY; y < startY + frameHeight; y++) {
-                for(int x = startX; x < startX + frameWidth; x++) {
-//                    if (scene.settings.wantAA) {
-//                        Color sum(0, 0, 0);
-//                        for (int i = 0; i < COUNT_OF(kernel); i++)
-//                            sum += raytrace(scene.camera->getScreenRay(x + kernel[i][0], y + kernel[i][1]));
-//                        pixel = sum / double(COUNT_OF(kernel));
-//                    } else {
-//                        Ray ray = scene.camera->getScreenRay(x, y);
-//                        pixel = raytrace(ray);
-//                    }
-                    pixel.components[0] = (y % 255) / 255.0;
-                    pixel.components[2] = (x % 255) / 255.0;
-                    cout<<pixel.toR8G8B8()<<" ";
-                }
-                cout<<"\n";
-            }
-            cout<<"Finished"<<std::endl;
-        }
-        if(line.find("close") != string::npos) {
-            return;
-        }
-    }
-}
 
 void renderScene(void)
 {
@@ -482,6 +439,75 @@ void renderScene(void)
 			pool.run(&task2, scene.settings.numThreads);
 		}
 	}
+}
+
+// renders a part of the scene as instructed by console commands
+void renderSceneConsoleMode(int width, int height, int startX, int startY)
+{
+    int W = width;
+    int H = height;
+
+    std::vector<Rect> buckets = getBucketsList(32, W, H, startX, startY);
+	if (scene.settings.wantPrepass || scene.settings.gi) {
+		// We render the whole screen in three passes.
+		// 1) First pass - use very coarse resolution rendering, tracing a single ray for a 8x8 block:
+		for (size_t i = 0; i < buckets.size(); i++) {
+			Rect& r = buckets[i];
+			for (int dy = 0; dy < r.h; dy += 8) {
+				int ey = min(r.h, dy + 8);
+				for (int dx = 0; dx < r.w; dx += 8) {
+					int ex = min(r.w, dx + 8);
+					renderPixelNoAA(r.x0 + dx, r.y0 + dy, ex - dx, ey - dy);
+				}
+			}
+		}
+	}
+
+	static ThreadPool pool;
+	TaskNoAA task1(buckets, false);
+	pool.run(&task1, scene.settings.numThreads);
+
+	if (scene.settings.wantAA && !scene.camera->dof && !scene.settings.gi) {
+		// second pass: find pixels, that need anti-aliasing, by analyzing their neighbours
+		for (int y = startY; y < H; y++) {
+			for (int x = startX; x < W; x++) {
+				Color neighs[5];
+				neighs[0] = vfb[y][x];
+
+				neighs[1] = vfb[y][x     > 0 ? x - 1 : x];
+				neighs[2] = vfb[y][x + 1 < W ? x + 1 : x];
+
+				neighs[3] = vfb[y     > 0 ? y - 1 : y][x];
+				neighs[4] = vfb[y + 1 < H ? y + 1 : y][x];
+
+				Color average(0, 0, 0);
+
+				for (int i = 0; i < 5; i++)
+					average += neighs[i];
+				average /= 5.0f;
+
+				for (int i = 0; i < 5; i++) {
+					if (tooDifferent(neighs[i], average)) {
+						needsAA[y][x] = true;
+						break;
+					}
+				}
+			}
+		}
+	}
+
+	/*
+     * A third pass, shooting additional rays for pixels that need them.
+     * Note that all pixels already are sampled with a ray at offset (0, 0),
+     * which coincides with sample #0 of our antialiasing kernel. So, instead
+     * of shooting five rays (the kernel size), we can just shoot the remaining
+     * four rays, adding with what we currently have in the pixel, and average
+     * after that.
+     */
+    if (scene.settings.wantAA && !scene.camera->dof) {
+        TaskAA task2(buckets, false);
+        pool.run(&task2, scene.settings.numThreads);
+    }
 }
 
 int renderSceneThread(void* /*unused*/)
@@ -620,6 +646,44 @@ void mainloop(void)
 	Uint32 ticks = SDL_GetTicks() - ticksStart;
 	printf("%d frames for %u ms, avg. framerate: %.2f FPS.\n", framesRendered,
 		   (unsigned) ticks, framesRendered * 1000.0f / ticks);
+}
+
+// console mode "main loop"
+void consoleMode(void)
+{
+    string line;
+    int frameWidth;
+    int frameHeight;
+    int startX, startY;
+
+    while(true)
+    {
+        std::cin>>line;
+        if (line.find("begin") != string::npos) {
+            cout<<"Rendering will start. Enter width, height, dx and dy in this order"<<endl;
+            cin>>frameWidth;
+            cin>>frameHeight;
+            cin>>startX;
+            cin>>startY;
+            cout<<frameWidth<<" "<<frameHeight<<" "<<startX<<" "<<startY<<endl;
+            cout<<"Starting"<<endl;
+            scene.beginFrame();
+            renderSceneConsoleMode(frameWidth, frameHeight, startX, startY);
+
+            // This should run only once rendering is completed and the necessary values are filled in
+            for(int y = startY; y < startY + frameHeight; y++) {
+                for(int x = startX; x < startX + frameWidth; x++) {
+                    cout<<vfb[y][x].toRGB32()<<" ";
+                }
+                cout<<"\n";
+            }
+            cout<<"Finished"<<std::endl;
+        }
+        if(line.find("close") != string::npos) {
+            SDL_Quit();
+            return;
+        }
+    }
 }
 
 int main(int argc, char** argv)
