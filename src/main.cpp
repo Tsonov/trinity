@@ -532,7 +532,7 @@ void handleMouse(SDL_MouseButtonEvent *mev)
 	printf("Raytracing completed!\n");
 }
 
-const char* defaultScene = "data/boxed.trinity";
+const char* defaultScene = "data/hw9/dragon.trinity";
 bool inConsoleMode = false;
 
 static bool parseCmdLine(int argc, char** argv)
@@ -652,27 +652,54 @@ void mainloop(void)
 void consoleMode(void)
 {
     string line;
-    int frameWidth;
-    int frameHeight;
+    int sectionWidth;
+    int sectionHeight;
     int startX, startY;
+    int frameWidth, frameHeight;
+    cout<<"Input the desired frame width and frame height in this order.";
+    cout<<"Note: This must be the whole frame's dimensions, not a single section to be rendered afterwards. Wrong values will cause distortion."<<endl;
+    cin>>frameWidth;
+    cin>>frameHeight;
+    if(frameWidth <= 0) {
+        cout<<"Invalid width, must be positive but got "<<frameWidth<<endl;
+        return;
+    }
+    if(frameHeight <= 0) {
+        cout<<"Invalid height, must be positive but got "<<frameHeight<<endl;
+        return;
+    }
+
+    // Override the scene values so that rendering works as expected
+    scene.settings.frameWidth = frameWidth;
+    scene.settings.frameHeight = frameHeight;
+    scene.beginRender();
 
     while(true)
     {
-        std::cin>>line;
+        cin>>line;
         if (line.find("begin") != string::npos) {
             cout<<"Rendering will start. Enter width, height, dx and dy in this order"<<endl;
-            cin>>frameWidth;
-            cin>>frameHeight;
+            cin>>sectionWidth;
+            cin>>sectionHeight;
             cin>>startX;
             cin>>startY;
-            cout<<frameWidth<<" "<<frameHeight<<" "<<startX<<" "<<startY<<endl;
+            cout<<frameWidth<<" "<<frameHeight<<" "<<" "<<startX<<sectionWidth<<" "<<startY<<" "<<sectionHeight<<endl;
+            if(startX < 0 || startX >= frameWidth
+               || startY < 0 || startY >= frameHeight
+               || sectionWidth < 0
+               || sectionHeight < 0
+               || startX + sectionWidth > frameWidth
+               || startY + sectionHeight > frameHeight) {
+                cout<<"Invalid values provided. Please review and fix."<<endl;
+                return;
+            }
             cout<<"Starting"<<endl;
             scene.beginFrame();
-            renderSceneConsoleMode(frameWidth, frameHeight, startX, startY);
+            renderSceneConsoleMode(sectionWidth, sectionHeight, startX, startY);
 
             // This should run only once rendering is completed and the necessary values are filled in
-            for(int y = startY; y < startY + frameHeight; y++) {
-                for(int x = startX; x < startX + frameWidth; x++) {
+            for(int y = startY; y < startY + sectionHeight; y++) {
+                for(int x = startX; x < startX + sectionWidth; x++) {
                     cout<<vfb[y][x].toRGB32()<<" ";
                 }
                 cout<<"\n";
@@ -700,7 +727,6 @@ int main(int argc, char** argv)
 	if (scene.settings.interactive)
 		scene.settings.wantAA = scene.settings.wantPrepass = false;
 
-    scene.beginRender();
 
     if (inConsoleMode) {
         if (scene.settings.interactive || scene.settings.fullscreen) {
@@ -709,6 +735,8 @@ int main(int argc, char** argv)
         consoleMode();
     } else {
         bool fullscreen = scene.settings.interactive && scene.settings.fullscreen;
+
+        scene.beginRender();
 
         if (!initGraphics(scene.settings.frameWidth, scene.settings.frameHeight, fullscreen)) return -1;
         if (scene.settings.interactive) {
