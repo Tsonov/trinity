@@ -447,21 +447,9 @@ void renderSceneConsoleMode(int width, int height, int startX, int startY)
     int W = width;
     int H = height;
 
-    std::vector<Rect> buckets = getBucketsList(32, W, H, startX, startY);
-	if (scene.settings.wantPrepass || scene.settings.gi) {
-		// We render the whole screen in three passes.
-		// 1) First pass - use very coarse resolution rendering, tracing a single ray for a 8x8 block:
-		for (size_t i = 0; i < buckets.size(); i++) {
-			Rect& r = buckets[i];
-			for (int dy = 0; dy < r.h; dy += 8) {
-				int ey = min(r.h, dy + 8);
-				for (int dx = 0; dx < r.w; dx += 8) {
-					int ex = min(r.w, dx + 8);
-					renderPixelNoAA(r.x0 + dx, r.y0 + dy, ex - dx, ey - dy);
-				}
-			}
-		}
-	}
+    std::vector<Rect> buckets = getBucketsList(BUCKET_SIZE_CONSOLE_MODE, W, H, startX, startY);
+
+    // No pre-pass should happen in console mode; first phase is skipped
 
 	static ThreadPool pool;
 	TaskNoAA task1(buckets, false);

@@ -29,6 +29,8 @@
 #define MAX_TRACE_DEPTH_DEFAULT 5
 #define MAX_TRIANGLES_PER_LEAF 20
 #define MAX_TREE_DEPTH         64
+#define BUCKET_SIZE 48
+#define BUCKET_SIZE_CONSOLE_MODE 16
 
 // large `float' number:
 #define LARGE_FLOAT 1e17f

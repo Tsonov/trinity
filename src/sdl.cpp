@@ -24,6 +24,7 @@
 #	include <windows.h> // for AllocConsole()
 #endif
 #include "sdl.h"
+#include "constants.h"
 using std::min;
 using std::max;
 
@@ -207,7 +208,6 @@ void waitForUserExit(void)
 
 std::vector<Rect> getBucketsList(void)
 {
-	const int BUCKET_SIZE = 48;
 	return getBucketsList(BUCKET_SIZE, frameWidth(), frameHeight(), 0, 0);
 }
 
