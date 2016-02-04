@@ -520,7 +520,7 @@ void handleMouse(SDL_MouseButtonEvent *mev)
 	printf("Raytracing completed!\n");
 }
 
-const char* defaultScene = "data/hw9/dragon.trinity";
+const char* defaultScene = "data/beer.trinity";
 bool inConsoleMode = false;
 
 static bool parseCmdLine(int argc, char** argv)

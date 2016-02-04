@@ -24,6 +24,7 @@
 #include "shading.h"
 #include "random_generator.h"
 
+
 using std::max;
 
 extern bool testVisibility(const Vector& from, const Vector& to);
@@ -72,9 +73,9 @@ Color Lambert::shade(const Ray& ray, const IntersectionData& data)
 	// from the texture, if it's set up.
 	Color diffuseColor = this->color;
 	if (texture) diffuseColor = texture->getTexColor(ray, data.u, data.v, N);
-	
+
 	Color lightContrib = scene.settings.ambientLight;
-	
+
 	for (int i = 0; i < (int) scene.lights.size(); i++) {
 		int numSamples = scene.lights[i]->getNumSamples();
 		Color avgColor(0, 0, 0);
@@ -85,7 +86,7 @@ Color Lambert::shade(const Ray& ray, const IntersectionData& data)
 			if (lightColor.intensity() != 0 && testVisibility(data.p + N * 1e-6, lightPos)) {
 				Vector lightDir = lightPos - data.p;
 				lightDir.normalize();
-				
+
 				// get the Lambertian cosine of the angle between the geometry's normal and
 				// the direction to the light. This will scale the lighting:
 				double cosTheta = dot(lightDir, N);
@@ -109,19 +110,19 @@ Color Lambert::eval(const IntersectionData& x, const Ray& w_in, const Ray& w_out
 Vector hemisphereSample(const Vector& normal)
 {
 	Random& rgen = getRandomGen();
-	
+
 	double u = rgen.randdouble();
 	double v = rgen.randdouble();
-	
+
 	double theta = 2 * PI * u;
 	double phi = acos(2 * v - 1) - PI/2;
-	
+
 	Vector res(
 		cos(theta) * cos(phi),
 		sin(phi),
 		sin(theta) * cos(phi)
 	);
-	
+
 	if (dot(res, normal) < 0)
 		res = -res;
 	return res;
@@ -134,7 +135,7 @@ void Lambert::spawnRay(const IntersectionData& x, const Ray& w_in, Ray& w_out, C
 	if (texture) diffuseColor = texture->getTexColor(w_in, x.u, x.v, N);
 
 	w_out = w_in;
-	
+
 	w_out.depth++;
 	w_out.start = x.p + N * 1e-6;
 	w_out.dir = hemisphereSample(N);
@@ -150,10 +151,10 @@ Color Phong::shade(const Ray& ray, const IntersectionData& data)
 
 	Color diffuseColor = this->color;
 	if (texture) diffuseColor = texture->getTexColor(ray, data.u, data.v, N);
-	
+
 	Color lightContrib = scene.settings.ambientLight;
 	Color specular(0, 0, 0);
-	
+
 	for (int i = 0; i < (int) scene.lights.size(); i++) {
 		int numSamples = scene.lights[i]->getNumSamples();
 		Color avgColor(0, 0, 0);
@@ -165,7 +166,7 @@ Color Phong::shade(const Ray& ray, const IntersectionData& data)
 			if (lightColor.intensity() != 0 && testVisibility(data.p + N * 1e-6, lightPos)) {
 				Vector lightDir = lightPos - data.p;
 				lightDir.normalize();
-				
+
 				// get the Lambertian cosine of the angle between the geometry's normal and
 				// the direction to the light. This will scale the lighting:
 				double cosTheta = dot(lightDir, N);
@@ -174,15 +175,15 @@ Color Phong::shade(const Ray& ray, const IntersectionData& data)
 				Color baseLight = lightColor / (data.p - lightPos).lengthSqr();
 				if (cosTheta > 0)
 					avgColor += baseLight * cosTheta; // lambertian contribution
-				
+
 				// R = vector after the ray from the light towards the intersection point
 				// is reflected at the intersection:
 				Vector R = reflect(-lightDir, N);
-				
+
 				double cosGamma = dot(R, -ray.dir);
 				if (cosGamma > 0)
 					avgSpecular += baseLight * pow(cosGamma, exponent) * strength; // specular contribution
-			
+
 			}
 		}
 		lightContrib += avgColor / numSamples;
@@ -213,11 +214,11 @@ Color BitmapTexture::getTexColor(const Ray& ray, double u, double v, Vector& nor
 Color Refl::shade(const Ray& ray, const IntersectionData& data)
 {
 	Vector N = faceforward(ray.dir, data.normal);
-	
+
 	if (glossiness == 1) {
 	 	// The material is't glossy: simple reflection, launch a single ray:
 		Vector reflected = reflect(ray.dir, N);
-		
+
 		Ray newRay = ray;
 		newRay.start = data.p + N * 1e-6;
 		newRay.dir = reflected;
@@ -241,15 +242,15 @@ Color Refl::shade(const Ray& ray, const IntersectionData& data)
 				rnd.unitDiscSample(x, y);
 				x *= scaling;
 				y *= scaling;
-				
+
 				// modify the normal according to the random offset:
 				Vector newNormal = N + a * x + b * y;
 				newNormal.normalize();
-				
+
 				// reflect the incoming ray around the new normal:
 				reflected = reflect(ray.dir, newNormal);
 			} while (dot(reflected, N) < 0); // check if the reflection is valid.
-			
+
 			// sample the resulting valid ray, and add to the sum
 			Ray newRay = ray;
 			newRay.start = data.p + N * 1e-6;
@@ -264,24 +265,24 @@ Color Refl::shade(const Ray& ray, const IntersectionData& data)
 
 Color Refl::eval(const IntersectionData& x, const Ray& w_in, const Ray& w_out)
 {
-	if (glossiness < 1) {	
+	if (glossiness < 1) {
 		return Shader::eval(x, w_in, w_out);
 	}
-	
+
 	// if (reflect(w_in.dir) == w_out.dir) return INF;
 	return Color(0, 0, 0);
 }
 
 void Refl::spawnRay(const IntersectionData& x, const Ray& w_in, Ray& w_out, Color& colorEval, float& pdf)
 {
-	if (glossiness < 1) {	
+	if (glossiness < 1) {
 		return Shader::spawnRay(x, w_in, w_out, colorEval, pdf);
 	}
 	Vector N = faceforward(w_in.dir, x.normal);
-	
+
 	// The material is't glossy: simple reflection, launch a single ray:
 	Vector reflected = reflect(w_in.dir, N);
-	
+
 	w_out = w_in;
 	w_out.start = x.p + N * 1e-6;
 	w_out.dir = reflected;
@@ -295,19 +296,28 @@ void Refl::spawnRay(const IntersectionData& x, const Ray& w_in, Ray& w_out, Colo
 Color Refr::shade(const Ray& ray, const IntersectionData& data)
 {
 	Vector N = faceforward(ray.dir, data.normal);
-	
+
 	// refract() expects the ratio of IOR_WE_ARE_EXITING : IOR_WE_ARE_ENTERING.
 	// the ior parameter has the ratio of this material to vacuum, so if we're
 	// entering the geometry, be sure to take the reciprocal
 	float eta = ior;
-	if (dot(ray.dir, data.normal) < 0)
+	bool travelledInGeometry;
+	if (dot(ray.dir, data.normal) < 0) {
 		eta = 1.0f / eta;
-	
+		travelledInGeometry = false;
+	} else {
+	    travelledInGeometry = true;
+	}
 	Vector refracted = refract(ray.dir, N, eta);
-	
+
 	// total inner refraction:
 	if (refracted.lengthSqr() == 0) return Color(0, 0, 0);
-	
+
+    if(travelledInGeometry && absorption > 0.0) {
+        double absorbanceCoef = exp((-data.dist) * absorption);
+        color = absorbanceCoef * color + (1 - absorbanceCoef) * insideColor;
+    }
+
 	Ray newRay = ray;
 	newRay.start = data.p + ray.dir * 1e-6;
 	newRay.dir = refracted;
@@ -323,23 +333,23 @@ Color Refr::eval(const IntersectionData& x, const Ray& w_in, const Ray& w_out)
 void Refr::spawnRay(const IntersectionData& x, const Ray& w_in, Ray& w_out, Color& colorEval, float& pdf)
 {
 	Vector N = faceforward(w_in.dir, x.normal);
-	
+
 	// refract() expects the ratio of IOR_WE_ARE_EXITING : IOR_WE_ARE_ENTERING.
 	// the ior parameter has the ratio of this material to vacuum, so if we're
 	// entering the geometry, be sure to take the reciprocal
 	float eta = ior;
 	if (dot(w_in.dir, x.normal) < 0)
 		eta = 1.0f / eta;
-	
+
 	Vector refracted = refract(w_in.dir, N, eta);
-	
+
 	// total inner refraction:
 	if (refracted.lengthSqr() == 0) {
 		pdf = 0;
 		colorEval.makeZero();
 		return;
 	}
-	
+
 	w_out = w_in;
 	w_out.start = x.p + w_in.dir * 1e-6;
 	w_out.dir = refracted;
@@ -365,8 +375,8 @@ Color Layered::shade(const Ray& ray, const IntersectionData& data)
 	Vector N = data.normal;
 	for (int i = 0; i < numLayers; i++) {
 		Layer& l = layers[i];
-		Color opacity = l.texture ? 
-			l.texture->getTexColor(ray, data.u, data.v, N) : l.blend; 
+		Color opacity = l.texture ?
+			l.texture->getTexColor(ray, data.u, data.v, N) : l.blend;
 		Color transparency = Color(1, 1, 1) - opacity;
 		result = transparency * result + opacity * l.shader->shade(ray, data);
 	}
@@ -441,7 +451,7 @@ Color Fresnel::getTexColor(const Ray& ray, double u, double v, Vector& normal)
 void BumpTexture::modifyNormal(IntersectionData& data)
 {
 	Color bumpVal = getTexValue(bmp, data.u, data.v) * strength;
-	
+
 	data.normal += data.dNdx * bumpVal[0] + data.dNdy * bumpVal[1];
 	data.normal.normalize();
 }
@@ -454,7 +464,7 @@ void Bumps::modifyNormal(IntersectionData& data)
 		float intensityX[3] = { 0.1, 0.08, 0.05 }, intensityZ[3] = { 0.1, 0.08, 0.05 };
 		double dx = 0, dy = 0;
 		for (int i = 0; i < 3; i++) {
-			dx += sin(fm * freqX[i] * data.u) * intensityX[i] * strength; 
+			dx += sin(fm * freqX[i] * data.u) * intensityX[i] * strength;
 			dy += sin(fm * freqZ[i] * data.v) * intensityZ[i] * strength;
 		}
 		data.normal += dx * data.dNdx + dy * data.dNdy;
